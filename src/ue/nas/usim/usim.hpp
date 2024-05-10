@@ -32,6 +32,8 @@ class Usim
     std::unique_ptr<NasSecurityContext> m_nonCurrentNsCtx{};
     OctetString m_rand{};
     OctetString m_resStar{};
+    //add rand N in Usim
+    OctetString m_randN;
     std::unique_ptr<SqnManager> m_sqnMng{};
 
     // Others

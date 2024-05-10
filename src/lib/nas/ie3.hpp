@@ -50,7 +50,16 @@ struct IEAuthenticationParameterRand : InformationElement3
     static IEAuthenticationParameterRand Decode(const OctetView &stream);
     static void Encode(const IEAuthenticationParameterRand &ie, OctetString &stream);
 };
+struct IEAuthenticationParameterRandN : InformationElement3
+{
+    OctetString value;
 
+    IEAuthenticationParameterRandN() = default;
+    explicit IEAuthenticationParameterRandN(OctetString &&value);
+
+    static IEAuthenticationParameterRandN Decode(const OctetView &stream);
+    static void Encode(const IEAuthenticationParameterRandN &ie, OctetString &stream);
+};
 struct IEEpsNasSecurityAlgorithms : InformationElement3
 {
     EEpsTypeOfIntegrityProtectionAlgorithm integrity{};

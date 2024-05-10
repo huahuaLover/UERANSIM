@@ -134,6 +134,8 @@ class NasMm
     EAutnValidationRes validateAutn(const OctetString &rand, const OctetString &autn);
     crypto::milenage::Milenage calculateMilenage(const OctetString &sqn, const OctetString &rand, bool dummyAmf);
     bool networkFailingTheAuthCheck(bool hasChance);
+    //add 
+    EAutnValidationRes validateAutn5GESAKA(const OctetString &rand, const OctetString &autn,const OctetString &snmac);
 
   private: /* Security */
     void receiveSecurityModeCommand(const nas::SecurityModeCommand &msg);

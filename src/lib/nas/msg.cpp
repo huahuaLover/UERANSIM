@@ -49,6 +49,7 @@ void AuthenticationRequest::onBuild(NasMessageBuilder &b)
     b.mandatoryIE(&abba);
     b.optionalIE(0x21, &authParamRAND);
     b.optionalIE(0x20, &authParamAUTN);
+    b.optionalIE(0x99, &authParamSNMAC);
     b.optionalIE(0x78, &eapMessage);
 }
 
@@ -544,6 +545,7 @@ void RegistrationRequest::onBuild(NasMessageBuilder &b)
 {
     b.mandatoryIE1(&nasKeySetIdentifier, &registrationType);
     b.mandatoryIE(&mobileIdentity);
+    //b.mandatoryIE(&randomN);
     b.optionalIE1(0xC, &nonCurrentNgKsi);
     b.optionalIE1(0xB, &micoIndication);
     b.optionalIE1(0x9, &networkSlicingIndication);
@@ -564,6 +566,8 @@ void RegistrationRequest::onBuild(NasMessageBuilder &b)
     b.optionalIE(0x7B, &payloadContainer);
     b.optionalIE(0x53, &updateType);
     b.optionalIE(0x71, &nasMessageContainer);
+    b.optionalIE(0x29, &randomN);//ADD N
+    //b.optionalIE(0x29, &ueSecurityCapability);
 }
 
 SecurityModeCommand::SecurityModeCommand()

@@ -69,6 +69,20 @@ void IEAuthenticationParameterRand::Encode(const IEAuthenticationParameterRand &
 {
     stream.append(ie.value);
 }
+/*********************RAND_N**************************/
+IEAuthenticationParameterRandN::IEAuthenticationParameterRandN(OctetString &&value) : value(std::move(value))
+{
+}
+
+IEAuthenticationParameterRandN IEAuthenticationParameterRandN::Decode(const OctetView &stream)
+{
+    return IEAuthenticationParameterRandN{stream.readOctetString(16)};
+}
+
+void IEAuthenticationParameterRandN::Encode(const IEAuthenticationParameterRandN &ie, OctetString &stream)
+{
+    stream.append(ie.value);
+}
 
 IEEpsNasSecurityAlgorithms::IEEpsNasSecurityAlgorithms(EEpsTypeOfIntegrityProtectionAlgorithm integrity,
                                                        EEpsTypeOfCipheringAlgorithm ciphering)

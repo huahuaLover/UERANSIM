@@ -44,7 +44,7 @@ static bool HasNonCleartext(const nas::PlainMmMessage &msg)
                regReq.requestedDrxParameters || regReq.uesUsageSetting || regReq.updateType ||
                regReq.uplinkDataStatus || regReq.allowedPduSessionStatus || regReq.lastVisitedRegisteredTai ||
                regReq.s1UeNetworkCapability || regReq.pduSessionStatus || regReq.payloadContainer ||
-               regReq.ladnIndication;
+               regReq.ladnIndication || regReq.randomN;
     }
     else if (msg.messageType == nas::EMessageType::SERVICE_REQUEST)
     {
@@ -138,7 +138,7 @@ EProcRc NasMm::sendNasMessage(const nas::PlainMmMessage &msg)
 
         if (msg.messageType == nas::EMessageType::REGISTRATION_REQUEST ||
             msg.messageType == nas::EMessageType::SERVICE_REQUEST)
-        {
+        {//question
             if (m_cmState == ECmState::CM_IDLE)
             {
                 auto copy = nas::utils::DeepCopyMsg(msg);

@@ -90,7 +90,26 @@ EProcRc NasMm::sendInitialRegistration(EInitialRegCause regCause)
     request->mmCapability->lpp = nas::ELtePositioningProtocolCapability::NOT_SUPPORTED;
 
     // Assign other fields
-    request->mobileIdentity = getOrGeneratePreferredId();
+    /****************new add*******************/
+    Random r1,r2;//64
+    OctetString r_N = OctetString::Concat(OctetString::FromOctet8(r1.nextUL()),OctetString::FromOctet8(r2.nextUL()));
+    //request->randomN=nas::IEAuthenticationParameterRandN{};
+    //auto RandN = nas::IEAuthenticationParameterRandN{};
+    //RandN->value=r_N;
+    //request->randomN=RandN;
+    //resp.authenticationFailureParameter = nas::IEAuthenticationFailureParameter{};
+    //resp.authenticationFailureParameter->rawData = std::move(*auts);
+    nas::IEAuthenticationParameterRandN parameter(std::move(r_N));
+    
+    std::optional<nas::IEAuthenticationParameterRandN> optionalParameter(std::move(parameter));
+    //request->randomN=optionalParameter;
+    //request->randomN.reset(std::move(optionalParameter));
+request->randomN = std::move(optionalParameter);
+
+    //request->randomN=std::optional<nas::IEAuthenticationParameterRandN>{r_N};
+    m_usim->m_randN=r_N.copy();
+    /*************************************************/
+    request->mobileIdentity = getOrGeneratePreferredId();//SUCI
     if (m_storage->lastVisitedRegisteredTai->get().hasValue())
         request->lastVisitedRegisteredTai = nas::IE5gsTrackingAreaIdentity{m_storage->lastVisitedRegisteredTai->get()};
     if (!requestedNssai.slices.empty())
@@ -98,7 +117,7 @@ EProcRc NasMm::sendInitialRegistration(EInitialRegCause regCause)
     request->ueSecurityCapability = createSecurityCapabilityIe();
     request->updateType =
         nas::IE5gsUpdateType(nas::ESmsRequested::NOT_SUPPORTED, nas::ENgRanRadioCapabilityUpdate::NOT_NEEDED);
-
+    
     // Assign ngKSI
     if (m_usim->m_currentNsCtx)
     {
@@ -131,7 +150,7 @@ EProcRc NasMm::sendMobilityRegistration(ERegUpdateCause updateCause)
     {
         m_logger->warn("Mobility updating could not be triggered. UE is in RM-DEREGISTERED state.");
         return EProcRc::CANCEL;
-    }
+    }//nothing
 
     if (m_mmState == EMmState::MM_REGISTERED_INITIATED)
         return EProcRc::CANCEL;
@@ -226,6 +245,23 @@ EProcRc NasMm::sendMobilityRegistration(ERegUpdateCause updateCause)
     }
 
     // Assign other fields
+    /****************new add*******************/
+    Random r1,r2;//64
+    OctetString r_N = OctetString::Concat(OctetString::FromOctet8(r1.nextUL()),OctetString::FromOctet8(r2.nextUL()));
+    //OctetString randomN=r_N.copy();
+    //request->randomN=r_N;
+    //auto RandN = nas::IEAuthenticationParameterRandN{};
+    //RandN->value=std::move(*r_N);
+   // nas::IEAuthenticationParameterRandN parameter(r_N);
+    //std::optional<nas::IEAuthenticationParameterRandN> optionalParameter(parameter);
+
+    //request->randomN=optionalParameter;
+    nas::IEAuthenticationParameterRandN parameter(std::move(r_N));
+    
+    std::optional<nas::IEAuthenticationParameterRandN> optionalParameter(std::move(parameter));
+request->randomN = std::move(optionalParameter);
+    m_usim->m_randN=r_N.copy();
+    /*************************************************/
     if (m_storage->lastVisitedRegisteredTai->get().hasValue())
         request->lastVisitedRegisteredTai = nas::IE5gsTrackingAreaIdentity{m_storage->lastVisitedRegisteredTai->get()};
     request->mobileIdentity = getOrGeneratePreferredId();
@@ -278,16 +314,17 @@ void NasMm::receiveRegistrationAccept(const nas::RegistrationAccept &msg)
     auto regType = m_lastRegistrationRequest->registrationType.registrationType;
     if (regType == nas::ERegistrationType::INITIAL_REGISTRATION ||
         regType == nas::ERegistrationType::EMERGENCY_REGISTRATION)
-        receiveInitialRegistrationAccept(msg);
+        receiveInitialRegistrationAccept(msg);//*****************
     else
-        receiveMobilityRegistrationAccept(msg);
+        receiveMobilityRegistrationAccept(msg);//********************
 
     // The RAND and RES* values stored in the ME shall be deleted and timer T3516, if running, shall be stopped
     m_usim->m_rand = {};
     m_usim->m_resStar = {};
+    m_usim->m_randN={};
     m_timers->t3516.stop();
 }
-
+//use to receive ,is not to send
 void NasMm::receiveInitialRegistrationAccept(const nas::RegistrationAccept &msg)
 {
     Tai currentTai = m_base->shCtx.getCurrentTai();
@@ -602,6 +639,7 @@ void NasMm::receiveRegistrationReject(const nas::RegistrationReject &msg)
     // The RAND and RES* values stored in the ME shall be deleted and timer T3516, if running, shall be stopped
     m_usim->m_rand = {};
     m_usim->m_resStar = {};
+    m_usim->m_randN={};
     m_timers->t3516.stop();
 }
 

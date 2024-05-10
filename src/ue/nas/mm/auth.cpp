@@ -10,6 +10,7 @@
 
 #include <lib/nas/utils.hpp>
 #include <ue/nas/keys.hpp>
+#include <lib/crypt/crypt.hpp>
 
 namespace nr::ue
 {
@@ -293,13 +294,13 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
 
     // ========================== Check the received parameters syntactically ==========================
 
-    if (!msg.authParamRAND.has_value() || !msg.authParamAUTN.has_value())
+    if (!msg.authParamRAND.has_value() || !msg.authParamAUTN.has_value() || !msg.authParamSNMAC.has_value())
     {
         sendFailure(nas::EMmCause::SEMANTICALLY_INCORRECT_MESSAGE);
         return;
     }
 
-    if (msg.authParamRAND->value.length() != 16 || msg.authParamAUTN->value.length() != 16)
+    if (msg.authParamRAND->value.length() != 16 || msg.authParamAUTN->value.length() != 16 || msg.authParamSNMAC->value.length() != 32)
     {
         sendFailure(nas::EMmCause::SEMANTICALLY_INCORRECT_MESSAGE);
         return;
@@ -336,7 +337,7 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
 
     auto &rand = msg.authParamRAND->value;
     auto &autn = msg.authParamAUTN->value;
-
+    auto &snmac = msg.authParamSNMAC->value;//get snmac
     EAutnValidationRes autnCheck = EAutnValidationRes::OK;
 
     // If the received RAND is same with store stored RAND, bypass AUTN validation
@@ -344,16 +345,17 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
     //  happens, and hopefully that can be restored with the normal resynchronization procedure.
     if (m_usim->m_rand != rand)
     {
-        autnCheck = validateAutn(rand, autn);
+        autnCheck = validateAutn5GESAKA(rand, autn,snmac);
         m_timers->t3516.start();
     }
 
     if (autnCheck == EAutnValidationRes::OK)
     {
         // Calculate milenage
-        auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), rand, false);
+        auto milenage = calculateMilenage(rand, rand, false);//sqn is replaced by rand
         auto ckIk = OctetString::Concat(milenage.ck, milenage.ik);
-        auto sqnXorAk = OctetString::Xor(m_usim->m_sqnMng->getSqn(), milenage.ak);
+        //auto sqnXorAk = OctetString::Xor(m_usim->m_sqnMng->getSqn(), milenage.ak);
+        auto sqnXorAk = autn.subCopy(0, 6);
         auto snn = keys::ConstructServingNetworkName(currentPLmn);
 
         // Store the relevant parameters
@@ -364,7 +366,7 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
         m_usim->m_nonCurrentNsCtx = std::make_unique<NasSecurityContext>();
         m_usim->m_nonCurrentNsCtx->tsc = msg.ngKSI.tsc;
         m_usim->m_nonCurrentNsCtx->ngKsi = msg.ngKSI.ksi;
-        m_usim->m_nonCurrentNsCtx->keys.kAusf = keys::CalculateKAusfFor5gAka(milenage.ck, milenage.ik, snn, sqnXorAk);
+        m_usim->m_nonCurrentNsCtx->keys.kAusf = keys::CalculateKAusfFor5gAka(milenage.ck, milenage.ik, snn, sqnXorAk);//sqnXorAk is replaced by AUTN SIX 
         m_usim->m_nonCurrentNsCtx->keys.abba = msg.abba.rawData.copy();
 
         keys::DeriveKeysSeafAmf(*m_base->config, currentPLmn, *m_usim->m_nonCurrentNsCtx);
@@ -386,7 +388,7 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
         m_timers->t3520.start();
         sendFailure(nas::EMmCause::MAC_FAILURE);
     }
-    else if (autnCheck == EAutnValidationRes::SYNCHRONISATION_FAILURE)
+    /*else if (autnCheck == EAutnValidationRes::SYNCHRONISATION_FAILURE)
     {
         if (networkFailingTheAuthCheck(true))
             return;
@@ -396,7 +398,7 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
         auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), rand, true);
         auto auts = keys::CalculateAuts(m_usim->m_sqnMng->getSqn(), milenage.ak_r, milenage.mac_s);
         sendFailure(nas::EMmCause::SYNCH_FAILURE, std::move(auts));
-    }
+    }*/
     else // the other case, separation bit mismatched
     {
         if (networkFailingTheAuthCheck(true))
@@ -510,6 +512,42 @@ EAutnValidationRes NasMm::validateAutn(const OctetString &rand, const OctetStrin
 
     return EAutnValidationRes::OK;
 }
+/***********add new check function for 5G-ESAKA****************/
+EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const OctetString &autn,const OctetString &snmac)
+{
+    // Decode AUTN is 8bits now
+
+    std::vector<uint8_t> out(32);//inspired from HmacSha256
+    //unsigned char buf[32];
+    // Derive AK and MAC
+    auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), rand, false);
+    OctetString HNMAC = OctetString::Xor(milenage.mac_s,autn);
+    Plmn currentPLmn = m_base->shCtx.getCurrentPlmn();
+    auto string_snn = keys::ConstructServingNetworkName(currentPLmn);
+    OctetString snn = crypto::EncodeKdfString(string_snn);
+    //pin jie
+    auto tem1=OctetString::Concat(HNMAC,m_usim->m_randN);
+    auto tem2=OctetString::Concat(tem1,snn);
+    sha256_hash(out.data(), tem2.data(),tem2.length());
+    OctetString xsnmac=OctetString{std::move(out)};
+    //OctetString xsnmac=OctetString(buf);
+    // Check SNMAC
+    if(xsnmac != snmac)
+    {
+              m_logger->err("AUTN validation SNMAC mismatch. expected [%s] received [%s]", xsnmac.toHexString().c_str(),
+                      snmac.toHexString().c_str());
+        return EAutnValidationRes::MAC_FAILURE;
+    }
+    // Check MAC
+    if (HNMAC != milenage.mac_a)
+    {
+        m_logger->err("AUTN validation MAC mismatch. expected [%s] received [%s]", milenage.mac_a.toHexString().c_str(),
+                      HNMAC.toHexString().c_str());
+        return EAutnValidationRes::MAC_FAILURE;
+    }
+
+    return EAutnValidationRes::OK;
+} 
 
 crypto::milenage::Milenage NasMm::calculateMilenage(const OctetString &sqn, const OctetString &rand, bool dummyAmf)
 {
