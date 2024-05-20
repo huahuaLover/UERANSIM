@@ -50,6 +50,16 @@ struct IEAuthenticationParameterRand : InformationElement3
     static IEAuthenticationParameterRand Decode(const OctetView &stream);
     static void Encode(const IEAuthenticationParameterRand &ie, OctetString &stream);
 };
+struct IEAuthenticationParameterSNMAC : InformationElement3
+{
+    OctetString value;
+
+    IEAuthenticationParameterSNMAC() = default;
+    explicit IEAuthenticationParameterSNMAC(OctetString &&value);
+
+    static IEAuthenticationParameterSNMAC Decode(const OctetView &stream);
+    static void Encode(const IEAuthenticationParameterSNMAC &ie, OctetString &stream);
+};
 struct IEAuthenticationParameterRandN : InformationElement3
 {
     OctetString value;

@@ -195,7 +195,20 @@ struct IE5gsMobileIdentity : InformationElement6
     static IE5gsMobileIdentity Decode(const OctetView &stream, int length);
     static void Encode(const IE5gsMobileIdentity &ie, OctetString &stream);
 };
+//add new 
+struct IE5gsRAND : InformationElement6
+{
+    //EIdentityType type{};
+    //ESupiFormat supiFormat; // meaningful if identityType is SUCI
 
+    // using at most one of the following 3 members:
+    //GutiMobileIdentity gutiOrTmsi{}; // used for TMSI and GUTI (some members not exist in TMSI)
+    //std::string value{};             // used for IMEI, IMEI-SV, NSI,
+    //ImsiMobileIdentity imsi{};       // used for IMSI
+    OctetString rand{};
+    static IE5gsRAND Decode(const OctetView &stream, int length);
+    static void Encode(const IE5gsRAND &ie, OctetString &stream);
+};
 struct IEEapMessage : InformationElement6
 {
     std::unique_ptr<eap::Eap> eap{};

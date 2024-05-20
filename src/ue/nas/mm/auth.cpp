@@ -262,6 +262,7 @@ void NasMm::receiveAuthenticationRequestEap(const nas::AuthenticationRequest &ms
 
 void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &msg)
 {
+    m_logger->debug("Come In");
     Plmn currentPLmn = m_base->shCtx.getCurrentPlmn();
     if (!currentPLmn.hasValue())
         return;
@@ -296,15 +297,17 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
 
     if (!msg.authParamRAND.has_value() || !msg.authParamAUTN.has_value() || !msg.authParamSNMAC.has_value())
     {
+        m_logger->debug("SNMAC may has no value");
         sendFailure(nas::EMmCause::SEMANTICALLY_INCORRECT_MESSAGE);
         return;
     }
-
-    if (msg.authParamRAND->value.length() != 16 || msg.authParamAUTN->value.length() != 16 || msg.authParamSNMAC->value.length() != 32)
+    m_logger->debug("rand length: %d autn length: %d snmac length: %d", msg.authParamRAND->value.length(),msg.authParamAUTN->value.length(),msg.authParamSNMAC->value.length());
+   /* if (msg.authParamRAND->value.length() != 16 || msg.authParamAUTN->value.length() != 4)
     {
+        m_logger->debug("The length of SNMAC may not right");
         sendFailure(nas::EMmCause::SEMANTICALLY_INCORRECT_MESSAGE);
         return;
-    }
+    }*/
 
     // =================================== Check the received ngKSI ===================================
 
@@ -337,14 +340,18 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
 
     auto &rand = msg.authParamRAND->value;
     auto &autn = msg.authParamAUTN->value;
+    //auto &snmac = msg.authParamAUTN->value;
     auto &snmac = msg.authParamSNMAC->value;//get snmac
     EAutnValidationRes autnCheck = EAutnValidationRes::OK;
-
+    m_logger->debug("----------------------");
+    m_logger->debug("rand: %s autn: %s snmac: %s", rand.toHexString().c_str(),
+                          autn.toHexString().c_str(),snmac.toHexString().c_str());
     // If the received RAND is same with store stored RAND, bypass AUTN validation
     // NOTE: Not completely sure if this is correct and the spec meant this. But in worst case, synchronisation failure
     //  happens, and hopefully that can be restored with the normal resynchronization procedure.
     if (m_usim->m_rand != rand)
     {
+        m_logger->debug("The verification into the validate");
         autnCheck = validateAutn5GESAKA(rand, autn,snmac);
         m_timers->t3516.start();
     }
@@ -527,6 +534,12 @@ EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const Oct
     OctetString snn = crypto::EncodeKdfString(string_snn);
     //pin jie
     auto tem1=OctetString::Concat(HNMAC,m_usim->m_randN);
+    m_logger->debug("Valicate HNMAC[%s]", HNMAC.toHexString().c_str());
+    m_logger->debug("Valicate N[%s]", m_usim->m_randN.toHexString().c_str());
+    m_logger->debug("Valicate IDSN[%s]", snn.toHexString().c_str());
+
+    
+
     auto tem2=OctetString::Concat(tem1,snn);
     sha256_hash(out.data(), tem2.data(),tem2.length());
     OctetString xsnmac=OctetString{std::move(out)};

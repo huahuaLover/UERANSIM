@@ -567,7 +567,6 @@ void RegistrationRequest::onBuild(NasMessageBuilder &b)
     b.optionalIE(0x53, &updateType);
     b.optionalIE(0x71, &nasMessageContainer);
     b.optionalIE(0x29, &randomN);//ADD N
-    //b.optionalIE(0x29, &ueSecurityCapability);
 }
 
 SecurityModeCommand::SecurityModeCommand()

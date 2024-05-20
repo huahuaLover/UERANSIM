@@ -147,7 +147,7 @@ struct AuthenticationRequest : PlainMmMessage
     std::optional<IEAuthenticationParameterRand> authParamRAND{};
     std::optional<IEAuthenticationParameterAutn> authParamAUTN{};
     //add SNMAC,all these three is same 
-    std::optional<IEAuthenticationParameterAutn> authParamSNMAC{};
+    std::optional<IEAuthenticationParameterSNMAC> authParamSNMAC{};
     std::optional<IEEapMessage> eapMessage{};
 
     AuthenticationRequest();
@@ -523,6 +523,7 @@ struct RegistrationRequest : PlainMmMessage
     IE5gsRegistrationType registrationType{};
     IENasKeySetIdentifier nasKeySetIdentifier{};
     IE5gsMobileIdentity mobileIdentity{};
+    //std::optional<IEAuthenticationParameterAutn> randomN{};
     std::optional<IEAuthenticationParameterRandN> randomN{};//add random N 
     std::optional<IENasKeySetIdentifier> nonCurrentNgKsi{};
     std::optional<IEMicoIndication> micoIndication{};

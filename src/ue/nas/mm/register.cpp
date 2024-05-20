@@ -93,21 +93,23 @@ EProcRc NasMm::sendInitialRegistration(EInitialRegCause regCause)
     /****************new add*******************/
     Random r1,r2;//64
     OctetString r_N = OctetString::Concat(OctetString::FromOctet8(r1.nextUL()),OctetString::FromOctet8(r2.nextUL()));
-    //request->randomN=nas::IEAuthenticationParameterRandN{};
-    //auto RandN = nas::IEAuthenticationParameterRandN{};
-    //RandN->value=r_N;
-    //request->randomN=RandN;
-    //resp.authenticationFailureParameter = nas::IEAuthenticationFailureParameter{};
-    //resp.authenticationFailureParameter->rawData = std::move(*auts);
-    nas::IEAuthenticationParameterRandN parameter(std::move(r_N));
+        m_logger->debug("Register1 r_N[%s]", r_N.toHexString().c_str());
+        m_usim->m_randN=r_N.copy();
+        m_logger->debug("Register1 m_usim[%s]", m_usim->m_randN.toHexString().c_str());
+    ////////
     
+    /*nas::IEAuthenticationParameterAutn parameter(std::move(r_N));
+    std::optional<nas::IEAuthenticationParameterAutn> optionalParameter(std::move(parameter));
+
+request->randomN = std::move(optionalParameter);*/
+    nas::IEAuthenticationParameterRandN parameter(std::move(r_N));
     std::optional<nas::IEAuthenticationParameterRandN> optionalParameter(std::move(parameter));
-    //request->randomN=optionalParameter;
-    //request->randomN.reset(std::move(optionalParameter));
+
 request->randomN = std::move(optionalParameter);
 
     //request->randomN=std::optional<nas::IEAuthenticationParameterRandN>{r_N};
-    m_usim->m_randN=r_N.copy();
+
+    //m_logger->debug("Register1 r_N[%s]", request->randomN.toHexString().c_str());
     /*************************************************/
     request->mobileIdentity = getOrGeneratePreferredId();//SUCI
     if (m_storage->lastVisitedRegisteredTai->get().hasValue())
@@ -248,6 +250,9 @@ EProcRc NasMm::sendMobilityRegistration(ERegUpdateCause updateCause)
     /****************new add*******************/
     Random r1,r2;//64
     OctetString r_N = OctetString::Concat(OctetString::FromOctet8(r1.nextUL()),OctetString::FromOctet8(r2.nextUL()));
+     m_logger->debug("Register2 r_N[%s]", r_N.toHexString().c_str());
+        m_usim->m_randN=r_N.copy();
+        m_logger->debug("Register2 m_usim[%s]", m_usim->m_randN.toHexString().c_str());
     //OctetString randomN=r_N.copy();
     //request->randomN=r_N;
     //auto RandN = nas::IEAuthenticationParameterRandN{};
@@ -260,7 +265,12 @@ EProcRc NasMm::sendMobilityRegistration(ERegUpdateCause updateCause)
     
     std::optional<nas::IEAuthenticationParameterRandN> optionalParameter(std::move(parameter));
 request->randomN = std::move(optionalParameter);
-    m_usim->m_randN=r_N.copy();
+  /*nas::IEAuthenticationParameterAutn parameter(std::move(r_N));
+    std::optional<nas::IEAuthenticationParameterAutn> optionalParameter(std::move(parameter));
+
+request->randomN = std::move(optionalParameter);*/
+
+    //m_logger->debug("Register2 r_N[%s]", request->randomN.toHexString().c_str());
     /*************************************************/
     if (m_storage->lastVisitedRegisteredTai->get().hasValue())
         request->lastVisitedRegisteredTai = nas::IE5gsTrackingAreaIdentity{m_storage->lastVisitedRegisteredTai->get()};
