@@ -527,8 +527,11 @@ EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const Oct
     std::vector<uint8_t> out(32);//inspired from HmacSha256
     //unsigned char buf[32];
     // Derive AK and MAC
-    auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), rand, false);
+    auto milenage = calculateMilenage(rand, rand, false);
+
     OctetString HNMAC = OctetString::Xor(milenage.mac_s,autn);
+        m_logger->debug("Valicate mac_s[%s]", milenage.mac_s.toHexString().c_str()); 
+        m_logger->debug("Valicate autn[%s]", autn.toHexString().c_str());
     Plmn currentPLmn = m_base->shCtx.getCurrentPlmn();
     auto string_snn = keys::ConstructServingNetworkName(currentPLmn);
     OctetString snn = crypto::EncodeKdfString(string_snn);
