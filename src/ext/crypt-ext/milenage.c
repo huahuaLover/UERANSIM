@@ -642,6 +642,46 @@ int milenage_f1(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *sqn, cons
         os_memcpy(mac_s, tmp1 + 8, 8); /* f1* */
     return 0;
 }
+int milenage_f1_ESAKA(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *amf, u8 *mac_a, u8 *mac_s)
+{
+    u8 tmp1[16], tmp2[16], tmp3[16];
+    int i;
+
+    /* tmp1 = TEMP = E_K(RAND XOR OP_C) */
+    for (i = 0; i < 16; i++)
+        tmp1[i] = _rand[i] ^ opc[i];
+    if (aes_128_encrypt_block(k, tmp1, tmp1))
+        return -1;
+
+    /* tmp2 = IN1 = SQN || AMF || SQN || AMF */
+    /*os_memcpy(tmp2, sqn, 6);
+    os_memcpy(tmp2 + 6, amf, 2);
+    os_memcpy(tmp2 + 8, tmp2, 8);*/
+    for(i = 0;i<16;i++)
+    {
+       tmp2[i] = _rand[i];
+    }
+    /* OUT1 = E_K(TEMP XOR rot(IN1 XOR OP_C, r1) XOR c1) XOR OP_C */
+
+    /* rotate (tmp2 XOR OP_C) by r1 (= 0x40 = 8 bytes) */
+    for (i = 0; i < 16; i++)
+        tmp3[(i + 8) % 16] = tmp2[i] ^ opc[i];
+    /* XOR with TEMP = E_K(RAND XOR OP_C) */
+    for (i = 0; i < 16; i++)
+        tmp3[i] ^= tmp1[i];
+    /* XOR with c1 (= ..00, i.e., NOP) */
+
+    /* f1 || f1* = E_K(tmp3) XOR OP_c */
+    if (aes_128_encrypt_block(k, tmp3, tmp1))
+        return -1;
+    for (i = 0; i < 16; i++)
+        tmp1[i] ^= opc[i];
+    if (mac_a)
+        os_memcpy(mac_a, tmp1, 8); /* f1 */
+    if (mac_s)
+        os_memcpy(mac_s, tmp1 + 8, 8); /* f1* */
+    return 0;
+}
 
 /**
  * milenage_f2345 - Milenage f2, f3, f4, f5, f5* algorithms

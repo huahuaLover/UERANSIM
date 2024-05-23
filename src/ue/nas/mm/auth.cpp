@@ -359,7 +359,7 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
     if (autnCheck == EAutnValidationRes::OK)
     {
         // Calculate milenage
-        auto milenage = calculateMilenage(rand, rand, false);//sqn is replaced by rand
+        auto milenage = calculateMilenageESAKA(rand, false);//sqn is replaced by rand
         auto ckIk = OctetString::Concat(milenage.ck, milenage.ik);
         //auto sqnXorAk = OctetString::Xor(m_usim->m_sqnMng->getSqn(), milenage.ak);
         auto sqnXorAk = autn.subCopy(0, 6);
@@ -527,7 +527,7 @@ EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const Oct
     std::vector<uint8_t> out(32);//inspired from HmacSha256
     //unsigned char buf[32];
     // Derive AK and MAC
-    auto milenage = calculateMilenage(rand, rand, false);
+    auto milenage = calculateMilenageESAKA(rand, false);
 
     OctetString HNMAC = OctetString::Xor(milenage.mac_s,autn);
         m_logger->debug("Valicate mac_s[%s]", milenage.mac_s.toHexString().c_str()); 
@@ -536,7 +536,7 @@ EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const Oct
     auto string_snn = keys::ConstructServingNetworkName(currentPLmn);
     OctetString snn = crypto::EncodeKdfString(string_snn);
     //pin jie
-    auto tem1=OctetString::Concat(HNMAC,m_usim->m_randN);
+    auto tem1=OctetString::Concat(m_usim->m_randN,HNMAC);
     m_logger->debug("Valicate HNMAC[%s]", HNMAC.toHexString().c_str());
     m_logger->debug("Valicate N[%s]", m_usim->m_randN.toHexString().c_str());
     m_logger->debug("Valicate IDSN[%s]", snn.toHexString().c_str());
@@ -546,6 +546,9 @@ EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const Oct
     auto tem2=OctetString::Concat(tem1,snn);
     sha256_hash(out.data(), tem2.data(),tem2.length());
     OctetString xsnmac=OctetString{std::move(out)};
+    xsnmac = xsnmac.subCopy(24, 8);
+    m_logger->debug("Valicate XSNMAC[%s]", xsnmac.toHexString().c_str());
+    //xsnmac
     //OctetString xsnmac=OctetString(buf);
     // Check SNMAC
     if(xsnmac != snmac)
@@ -574,6 +577,17 @@ crypto::milenage::Milenage NasMm::calculateMilenage(const OctetString &sqn, cons
 
     OctetString opc = crypto::milenage::CalculateOpC(m_base->config->opC, m_base->config->key);
     return crypto::milenage::Calculate(opc, m_base->config->key, rand, sqn, amf);
+}
+/************new fucthion for ESAKA********************/
+crypto::milenage::Milenage NasMm::calculateMilenageESAKA(const OctetString &rand, bool dummyAmf)
+{
+    OctetString amf = dummyAmf ? OctetString::FromSpare(2) : m_base->config->amf.copy();
+/*******NEW FUNCTION Calculate2***********/
+    if (m_base->config->opType == OpType::OPC)
+        return crypto::milenage::Calculate2(m_base->config->opC, m_base->config->key, rand,amf);
+
+    OctetString opc = crypto::milenage::CalculateOpC(m_base->config->opC, m_base->config->key);
+    return crypto::milenage::Calculate2(opc, m_base->config->key, rand,amf);
 }
 
 bool NasMm::networkFailingTheAuthCheck(bool hasChance)
