@@ -767,6 +767,79 @@ int milenage_f2345(const u8 *opc, const u8 *k, const u8 *_rand, u8 *res, u8 *ck,
 
     return 0;
 }
+/*****************ESAKA--ak is 64 bit**********************/
+int milenage_f2345_ESAKA(const u8 *opc, const u8 *k, const u8 *_rand, u8 *res, u8 *ck, u8 *ik, u8 *ak, u8 *akstar)
+{
+    u8 tmp1[16], tmp2[16], tmp3[16];
+    int i;
+
+    /* tmp2 = TEMP = E_K(RAND XOR OP_C) */
+    for (i = 0; i < 16; i++)
+        tmp1[i] = _rand[i] ^ opc[i];
+    if (aes_128_encrypt_block(k, tmp1, tmp2))
+        return -1;
+
+    /* OUT2 = E_K(rot(TEMP XOR OP_C, r2) XOR c2) XOR OP_C */
+    /* OUT3 = E_K(rot(TEMP XOR OP_C, r3) XOR c3) XOR OP_C */
+    /* OUT4 = E_K(rot(TEMP XOR OP_C, r4) XOR c4) XOR OP_C */
+    /* OUT5 = E_K(rot(TEMP XOR OP_C, r5) XOR c5) XOR OP_C */
+
+    /* f2 and f5 */
+    /* rotate by r2 (= 0, i.e., NOP) */
+    for (i = 0; i < 16; i++)
+        tmp1[i] = tmp2[i] ^ opc[i];
+    tmp1[15] ^= 1; /* XOR c2 (= ..01) */
+    /* f5 || f2 = E_K(tmp1) XOR OP_c */
+    if (aes_128_encrypt_block(k, tmp1, tmp3))
+        return -1;
+    for (i = 0; i < 16; i++)
+        tmp3[i] ^= opc[i];
+    if (res)
+        os_memcpy(res, tmp3 + 8, 8); /* f2 */
+    if (ak)
+        os_memcpy(ak, tmp3, 8); /* f5 */
+
+    /* f3 */
+    if (ck)
+    {
+        /* rotate by r3 = 0x20 = 4 bytes */
+        for (i = 0; i < 16; i++)
+            tmp1[(i + 12) % 16] = tmp2[i] ^ opc[i];
+        tmp1[15] ^= 2; /* XOR c3 (= ..02) */
+        if (aes_128_encrypt_block(k, tmp1, ck))
+            return -1;
+        for (i = 0; i < 16; i++)
+            ck[i] ^= opc[i];
+    }
+
+    /* f4 */
+    if (ik)
+    {
+        /* rotate by r4 = 0x40 = 8 bytes */
+        for (i = 0; i < 16; i++)
+            tmp1[(i + 8) % 16] = tmp2[i] ^ opc[i];
+        tmp1[15] ^= 4; /* XOR c4 (= ..04) */
+        if (aes_128_encrypt_block(k, tmp1, ik))
+            return -1;
+        for (i = 0; i < 16; i++)
+            ik[i] ^= opc[i];
+    }
+
+    /* f5* */
+    if (akstar)
+    {
+        /* rotate by r5 = 0x60 = 12 bytes */
+        for (i = 0; i < 16; i++)
+            tmp1[(i + 4) % 16] = tmp2[i] ^ opc[i];
+        tmp1[15] ^= 8; /* XOR c5 (= ..08) */
+        if (aes_128_encrypt_block(k, tmp1, tmp1))
+            return -1;
+        for (i = 0; i < 6; i++)
+            akstar[i] = tmp1[i] ^ opc[i];
+    }
+
+    return 0;
+}
 
 /**
  * milenage_generate - Generate AKA AUTN,IK,CK,RES

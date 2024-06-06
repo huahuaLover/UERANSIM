@@ -529,8 +529,8 @@ EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const Oct
     // Derive AK and MAC
     auto milenage = calculateMilenageESAKA(rand, false);
 
-    OctetString HNMAC = OctetString::Xor(milenage.mac_s,autn);
-        m_logger->debug("Valicate mac_s[%s]", milenage.mac_s.toHexString().c_str()); 
+    OctetString HNMAC = OctetString::Xor(milenage.ak,autn);
+        m_logger->debug("Valicate ak[%s]", milenage.ak.toHexString().c_str()); 
         m_logger->debug("Valicate autn[%s]", autn.toHexString().c_str());
     Plmn currentPLmn = m_base->shCtx.getCurrentPlmn();
     auto string_snn = keys::ConstructServingNetworkName(currentPLmn);

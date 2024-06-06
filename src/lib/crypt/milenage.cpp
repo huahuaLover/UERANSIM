@@ -28,7 +28,7 @@ Milenage Calculate2(const OctetString &opc, const OctetString &key, const OctetS
 
     if (milenage_f1_ESAKA(opc.data(), key.data(), rand.data(),amf.data(), r.mac_a.data(), r.mac_s.data()))
         throw std::runtime_error("Milenage calculation failed");
-    if (milenage_f2345(opc.data(), key.data(), rand.data(), r.res.data(), r.ck.data(), r.ik.data(), r.ak.data(),
+    if (milenage_f2345_ESAKA(opc.data(), key.data(), rand.data(), r.res.data(), r.ck.data(), r.ik.data(), r.ak.data(),
                        r.ak_r.data()))
         throw std::runtime_error("Milenage calculation failed");
 
