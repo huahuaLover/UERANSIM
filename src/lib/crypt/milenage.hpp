@@ -25,9 +25,7 @@ struct Milenage
 };
 
 Milenage Calculate(const OctetString &opc, const OctetString &key, const OctetString &rand, const OctetString &sqn,
-                   const OctetString &amf);
-Milenage Calculate2(const OctetString &opc, const OctetString &key, const OctetString &rand, 
-                   const OctetString &amf);                   
+                   const OctetString &amf,int flag);              
 
 OctetString CalculateOpC(const OctetString &op, const OctetString &key);
 

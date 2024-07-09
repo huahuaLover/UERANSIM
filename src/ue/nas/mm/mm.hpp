@@ -132,8 +132,7 @@ class NasMm
     void receiveEapSuccessMessage(const eap::Eap &eap);
     void receiveEapFailureMessage(const eap::Eap &eap);
     EAutnValidationRes validateAutn(const OctetString &rand, const OctetString &autn);
-    crypto::milenage::Milenage calculateMilenage(const OctetString &sqn, const OctetString &rand, bool dummyAmf);
-    crypto::milenage::Milenage calculateMilenageESAKA(const OctetString &rand, bool dummyAmf);
+    crypto::milenage::Milenage calculateMilenage(const OctetString &sqn, const OctetString &rand, bool dummyAmf,int flag);
     bool networkFailingTheAuthCheck(bool hasChance);
     //add 
     EAutnValidationRes validateAutn5GESAKA(const OctetString &rand, const OctetString &autn,const OctetString &snmac);

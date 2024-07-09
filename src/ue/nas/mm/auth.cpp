@@ -162,7 +162,7 @@ void NasMm::receiveAuthenticationRequestEap(const nas::AuthenticationRequest &ms
     if (autnCheck == EAutnValidationRes::OK)
     {
         // Calculate milenage
-        auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), receivedRand, false);
+        auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), receivedRand, false,0);
         auto sqnXorAk = OctetString::Xor(m_usim->m_sqnMng->getSqn(), milenage.ak);
         auto ckPrimeIkPrime = keys::CalculateCkPrimeIkPrime(milenage.ck, milenage.ik, snn, sqnXorAk);
         auto &ckPrime = ckPrimeIkPrime.first;
@@ -239,7 +239,7 @@ void NasMm::receiveAuthenticationRequestEap(const nas::AuthenticationRequest &ms
 
         m_timers->t3520.start();
 
-        auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), receivedRand, true);
+        auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), receivedRand, true,0);
         auto auts = keys::CalculateAuts(m_usim->m_sqnMng->getSqn(), milenage.ak_r, milenage.mac_s);
 
         auto eap = std::make_unique<eap::EapAkaPrime>(eap::ECode::RESPONSE, receivedEap.id,
@@ -262,7 +262,6 @@ void NasMm::receiveAuthenticationRequestEap(const nas::AuthenticationRequest &ms
 
 void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &msg)
 {
-    m_logger->debug("Come In");
     Plmn currentPLmn = m_base->shCtx.getCurrentPlmn();
     if (!currentPLmn.hasValue())
         return;
@@ -297,17 +296,9 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
 
     if (!msg.authParamRAND.has_value() || !msg.authParamAUTN.has_value() || !msg.authParamSNMAC.has_value())
     {
-        m_logger->debug("SNMAC may has no value");
         sendFailure(nas::EMmCause::SEMANTICALLY_INCORRECT_MESSAGE);
         return;
     }
-    m_logger->debug("rand length: %d autn length: %d snmac length: %d", msg.authParamRAND->value.length(),msg.authParamAUTN->value.length(),msg.authParamSNMAC->value.length());
-   /* if (msg.authParamRAND->value.length() != 16 || msg.authParamAUTN->value.length() != 4)
-    {
-        m_logger->debug("The length of SNMAC may not right");
-        sendFailure(nas::EMmCause::SEMANTICALLY_INCORRECT_MESSAGE);
-        return;
-    }*/
 
     // =================================== Check the received ngKSI ===================================
 
@@ -340,12 +331,8 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
 
     auto &rand = msg.authParamRAND->value;
     auto &autn = msg.authParamAUTN->value;
-    //auto &snmac = msg.authParamAUTN->value;
     auto &snmac = msg.authParamSNMAC->value;//get snmac
     EAutnValidationRes autnCheck = EAutnValidationRes::OK;
-    m_logger->debug("----------------------");
-    m_logger->debug("rand: %s autn: %s snmac: %s", rand.toHexString().c_str(),
-                          autn.toHexString().c_str(),snmac.toHexString().c_str());
     // If the received RAND is same with store stored RAND, bypass AUTN validation
     // NOTE: Not completely sure if this is correct and the spec meant this. But in worst case, synchronisation failure
     //  happens, and hopefully that can be restored with the normal resynchronization procedure.
@@ -359,9 +346,8 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
     if (autnCheck == EAutnValidationRes::OK)
     {
         // Calculate milenage
-        auto milenage = calculateMilenageESAKA(rand, false);//sqn is replaced by rand
+        auto milenage = calculateMilenage(rand,rand, false,1);//sqn is replaced by rand
         auto ckIk = OctetString::Concat(milenage.ck, milenage.ik);
-        //auto sqnXorAk = OctetString::Xor(m_usim->m_sqnMng->getSqn(), milenage.ak);
         auto sqnXorAk = autn.subCopy(0, 6);
         auto snn = keys::ConstructServingNetworkName(currentPLmn);
 
@@ -395,17 +381,6 @@ void NasMm::receiveAuthenticationRequest5gAka(const nas::AuthenticationRequest &
         m_timers->t3520.start();
         sendFailure(nas::EMmCause::MAC_FAILURE);
     }
-    /*else if (autnCheck == EAutnValidationRes::SYNCHRONISATION_FAILURE)
-    {
-        if (networkFailingTheAuthCheck(true))
-            return;
-
-        m_timers->t3520.start();
-
-        auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), rand, true);
-        auto auts = keys::CalculateAuts(m_usim->m_sqnMng->getSqn(), milenage.ak_r, milenage.mac_s);
-        sendFailure(nas::EMmCause::SYNCH_FAILURE, std::move(auts));
-    }*/
     else // the other case, separation bit mismatched
     {
         if (networkFailingTheAuthCheck(true))
@@ -494,7 +469,7 @@ EAutnValidationRes NasMm::validateAutn(const OctetString &rand, const OctetStrin
     }
 
     // Derive AK and MAC
-    auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), rand, false);
+    auto milenage = calculateMilenage(m_usim->m_sqnMng->getSqn(), rand, false,0);
     OctetString receivedSQN = OctetString::Xor(receivedSQNxorAK, milenage.ak);
 
     m_logger->debug("Received SQN [%s]", receivedSQN.toHexString().c_str());
@@ -504,7 +479,7 @@ EAutnValidationRes NasMm::validateAutn(const OctetString &rand, const OctetStrin
     bool sqn_ok = m_usim->m_sqnMng->checkSqn(receivedSQN);
 
     // Re-execute the milenage calculation (if case of sqn is changed with the received value)
-    milenage = calculateMilenage(receivedSQN, rand, false);
+    milenage = calculateMilenage(receivedSQN, rand, false,0);
 
     // Check MAC
     if (receivedMAC != milenage.mac_a)
@@ -522,34 +497,21 @@ EAutnValidationRes NasMm::validateAutn(const OctetString &rand, const OctetStrin
 /***********add new check function for 5G-ESAKA****************/
 EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const OctetString &autn,const OctetString &snmac)
 {
-    // Decode AUTN is 8bits now
 
-    std::vector<uint8_t> out(32);//inspired from HmacSha256
-    //unsigned char buf[32];
-    // Derive AK and MAC
-    auto milenage = calculateMilenageESAKA(rand, false);
+    std::vector<uint8_t> out(32);
+    auto milenage = calculateMilenage(rand,rand, false,1);
 
     OctetString HNMAC = OctetString::Xor(milenage.ak,autn);
-        m_logger->debug("Valicate ak[%s]", milenage.ak.toHexString().c_str()); 
-        m_logger->debug("Valicate autn[%s]", autn.toHexString().c_str());
     Plmn currentPLmn = m_base->shCtx.getCurrentPlmn();
     auto string_snn = keys::ConstructServingNetworkName(currentPLmn);
     OctetString snn = crypto::EncodeKdfString(string_snn);
-    //pin jie
+
     auto tem1=OctetString::Concat(m_usim->m_randN,HNMAC);
-    m_logger->debug("Valicate HNMAC[%s]", HNMAC.toHexString().c_str());
-    m_logger->debug("Valicate N[%s]", m_usim->m_randN.toHexString().c_str());
-    m_logger->debug("Valicate IDSN[%s]", snn.toHexString().c_str());
-
-    
-
     auto tem2=OctetString::Concat(tem1,snn);
     sha256_hash(out.data(), tem2.data(),tem2.length());
     OctetString xsnmac=OctetString{std::move(out)};
     xsnmac = xsnmac.subCopy(24, 8);
-    m_logger->debug("Valicate XSNMAC[%s]", xsnmac.toHexString().c_str());
-    //xsnmac
-    //OctetString xsnmac=OctetString(buf);
+
     // Check SNMAC
     if(xsnmac != snmac)
     {
@@ -568,27 +530,18 @@ EAutnValidationRes NasMm::validateAutn5GESAKA(const OctetString &rand, const Oct
     return EAutnValidationRes::OK;
 } 
 
-crypto::milenage::Milenage NasMm::calculateMilenage(const OctetString &sqn, const OctetString &rand, bool dummyAmf)
+crypto::milenage::Milenage NasMm::calculateMilenage(const OctetString &sqn, const OctetString &rand, bool dummyAmf,int flag)
 {
     OctetString amf = dummyAmf ? OctetString::FromSpare(2) : m_base->config->amf.copy();
 
     if (m_base->config->opType == OpType::OPC)
-        return crypto::milenage::Calculate(m_base->config->opC, m_base->config->key, rand, sqn, amf);
+        return crypto::milenage::Calculate(m_base->config->opC, m_base->config->key, rand, sqn, amf,flag);
 
     OctetString opc = crypto::milenage::CalculateOpC(m_base->config->opC, m_base->config->key);
-    return crypto::milenage::Calculate(opc, m_base->config->key, rand, sqn, amf);
+    return crypto::milenage::Calculate(opc, m_base->config->key, rand, sqn, amf,flag);
 }
-/************new fucthion for ESAKA********************/
-crypto::milenage::Milenage NasMm::calculateMilenageESAKA(const OctetString &rand, bool dummyAmf)
-{
-    OctetString amf = dummyAmf ? OctetString::FromSpare(2) : m_base->config->amf.copy();
-/*******NEW FUNCTION Calculate2***********/
-    if (m_base->config->opType == OpType::OPC)
-        return crypto::milenage::Calculate2(m_base->config->opC, m_base->config->key, rand,amf);
 
-    OctetString opc = crypto::milenage::CalculateOpC(m_base->config->opC, m_base->config->key);
-    return crypto::milenage::Calculate2(opc, m_base->config->key, rand,amf);
-}
+
 
 bool NasMm::networkFailingTheAuthCheck(bool hasChance)
 {

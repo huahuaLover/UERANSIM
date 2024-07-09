@@ -605,7 +605,7 @@ static int aes_128_encrypt_block(const u8 *key, const u8 *in, u8 *out)
  * @mac_s: Buffer for MAC-S = 64-bit resync authentication code, or %NULL
  * Returns: 0 on success, -1 on failure
  */
-int milenage_f1(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *sqn, const u8 *amf, u8 *mac_a, u8 *mac_s)
+int milenage_f1(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *sqn, const u8 *amf, u8 *mac_a, u8 *mac_s,int flag)
 {
     u8 tmp1[16], tmp2[16], tmp3[16];
     int i;
@@ -617,49 +617,19 @@ int milenage_f1(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *sqn, cons
         return -1;
 
     /* tmp2 = IN1 = SQN || AMF || SQN || AMF */
-    os_memcpy(tmp2, sqn, 6);
-    os_memcpy(tmp2 + 6, amf, 2);
-    os_memcpy(tmp2 + 8, tmp2, 8);
-
-    /* OUT1 = E_K(TEMP XOR rot(IN1 XOR OP_C, r1) XOR c1) XOR OP_C */
-
-    /* rotate (tmp2 XOR OP_C) by r1 (= 0x40 = 8 bytes) */
-    for (i = 0; i < 16; i++)
-        tmp3[(i + 8) % 16] = tmp2[i] ^ opc[i];
-    /* XOR with TEMP = E_K(RAND XOR OP_C) */
-    for (i = 0; i < 16; i++)
-        tmp3[i] ^= tmp1[i];
-    /* XOR with c1 (= ..00, i.e., NOP) */
-
-    /* f1 || f1* = E_K(tmp3) XOR OP_c */
-    if (aes_128_encrypt_block(k, tmp3, tmp1))
-        return -1;
-    for (i = 0; i < 16; i++)
-        tmp1[i] ^= opc[i];
-    if (mac_a)
-        os_memcpy(mac_a, tmp1, 8); /* f1 */
-    if (mac_s)
-        os_memcpy(mac_s, tmp1 + 8, 8); /* f1* */
-    return 0;
-}
-int milenage_f1_ESAKA(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *amf, u8 *mac_a, u8 *mac_s)
-{
-    u8 tmp1[16], tmp2[16], tmp3[16];
-    int i;
-
-    /* tmp1 = TEMP = E_K(RAND XOR OP_C) */
-    for (i = 0; i < 16; i++)
-        tmp1[i] = _rand[i] ^ opc[i];
-    if (aes_128_encrypt_block(k, tmp1, tmp1))
-        return -1;
-
-    /* tmp2 = IN1 = SQN || AMF || SQN || AMF */
-    /*os_memcpy(tmp2, sqn, 6);
-    os_memcpy(tmp2 + 6, amf, 2);
-    os_memcpy(tmp2 + 8, tmp2, 8);*/
-    for(i = 0;i<16;i++)
+    if(flag==0)
     {
-       tmp2[i] = _rand[i];
+       os_memcpy(tmp2, sqn, 6);
+       os_memcpy(tmp2 + 6, amf, 2);
+       os_memcpy(tmp2 + 8, tmp2, 8);
+    }
+    else if(flag==1)
+    {
+    //for 5G-RNAKA
+        for(i = 0;i<16;i++)
+       {
+        tmp2[i] = _rand[i];
+       }
     }
     /* OUT1 = E_K(TEMP XOR rot(IN1 XOR OP_C, r1) XOR c1) XOR OP_C */
 
@@ -682,6 +652,7 @@ int milenage_f1_ESAKA(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *amf
         os_memcpy(mac_s, tmp1 + 8, 8); /* f1* */
     return 0;
 }
+
 
 /**
  * milenage_f2345 - Milenage f2, f3, f4, f5, f5* algorithms
@@ -695,7 +666,7 @@ int milenage_f1_ESAKA(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *amf
  * @akstar: Buffer for AK = 48-bit anonymity key (f5*), or %NULL
  * Returns: 0 on success, -1 on failure
  */
-int milenage_f2345(const u8 *opc, const u8 *k, const u8 *_rand, u8 *res, u8 *ck, u8 *ik, u8 *ak, u8 *akstar)
+int milenage_f2345(const u8 *opc, const u8 *k, const u8 *_rand, u8 *res, u8 *ck, u8 *ik, u8 *ak, u8 *akstar,int flag)
 {
     u8 tmp1[16], tmp2[16], tmp3[16];
     int i;
@@ -723,82 +694,14 @@ int milenage_f2345(const u8 *opc, const u8 *k, const u8 *_rand, u8 *res, u8 *ck,
         tmp3[i] ^= opc[i];
     if (res)
         os_memcpy(res, tmp3 + 8, 8); /* f2 */
-    if (ak)
+    if (ak&&flag==0)
+    {
         os_memcpy(ak, tmp3, 6); /* f5 */
-
-    /* f3 */
-    if (ck)
-    {
-        /* rotate by r3 = 0x20 = 4 bytes */
-        for (i = 0; i < 16; i++)
-            tmp1[(i + 12) % 16] = tmp2[i] ^ opc[i];
-        tmp1[15] ^= 2; /* XOR c3 (= ..02) */
-        if (aes_128_encrypt_block(k, tmp1, ck))
-            return -1;
-        for (i = 0; i < 16; i++)
-            ck[i] ^= opc[i];
     }
-
-    /* f4 */
-    if (ik)
+    else if(ak&&flag==1)
     {
-        /* rotate by r4 = 0x40 = 8 bytes */
-        for (i = 0; i < 16; i++)
-            tmp1[(i + 8) % 16] = tmp2[i] ^ opc[i];
-        tmp1[15] ^= 4; /* XOR c4 (= ..04) */
-        if (aes_128_encrypt_block(k, tmp1, ik))
-            return -1;
-        for (i = 0; i < 16; i++)
-            ik[i] ^= opc[i];
-    }
-
-    /* f5* */
-    if (akstar)
-    {
-        /* rotate by r5 = 0x60 = 12 bytes */
-        for (i = 0; i < 16; i++)
-            tmp1[(i + 4) % 16] = tmp2[i] ^ opc[i];
-        tmp1[15] ^= 8; /* XOR c5 (= ..08) */
-        if (aes_128_encrypt_block(k, tmp1, tmp1))
-            return -1;
-        for (i = 0; i < 6; i++)
-            akstar[i] = tmp1[i] ^ opc[i];
-    }
-
-    return 0;
-}
-/*****************ESAKA--ak is 64 bit**********************/
-int milenage_f2345_ESAKA(const u8 *opc, const u8 *k, const u8 *_rand, u8 *res, u8 *ck, u8 *ik, u8 *ak, u8 *akstar)
-{
-    u8 tmp1[16], tmp2[16], tmp3[16];
-    int i;
-
-    /* tmp2 = TEMP = E_K(RAND XOR OP_C) */
-    for (i = 0; i < 16; i++)
-        tmp1[i] = _rand[i] ^ opc[i];
-    if (aes_128_encrypt_block(k, tmp1, tmp2))
-        return -1;
-
-    /* OUT2 = E_K(rot(TEMP XOR OP_C, r2) XOR c2) XOR OP_C */
-    /* OUT3 = E_K(rot(TEMP XOR OP_C, r3) XOR c3) XOR OP_C */
-    /* OUT4 = E_K(rot(TEMP XOR OP_C, r4) XOR c4) XOR OP_C */
-    /* OUT5 = E_K(rot(TEMP XOR OP_C, r5) XOR c5) XOR OP_C */
-
-    /* f2 and f5 */
-    /* rotate by r2 (= 0, i.e., NOP) */
-    for (i = 0; i < 16; i++)
-        tmp1[i] = tmp2[i] ^ opc[i];
-    tmp1[15] ^= 1; /* XOR c2 (= ..01) */
-    /* f5 || f2 = E_K(tmp1) XOR OP_c */
-    if (aes_128_encrypt_block(k, tmp1, tmp3))
-        return -1;
-    for (i = 0; i < 16; i++)
-        tmp3[i] ^= opc[i];
-    if (res)
-        os_memcpy(res, tmp3 + 8, 8); /* f2 */
-    if (ak)
         os_memcpy(ak, tmp3, 8); /* f5 */
-
+    }
     /* f3 */
     if (ck)
     {
@@ -840,6 +743,7 @@ int milenage_f2345_ESAKA(const u8 *opc, const u8 *k, const u8 *_rand, u8 *res, u
 
     return 0;
 }
+
 
 /**
  * milenage_generate - Generate AKA AUTN,IK,CK,RES
@@ -865,7 +769,7 @@ void milenage_generate(const u8 *opc, const u8 *amf, const u8 *k, const u8 *sqn,
         *res_len = 0;
         return;
     }
-    if (milenage_f1(opc, k, _rand, sqn, amf, mac_a, NULL) || milenage_f2345(opc, k, _rand, res, ck, ik, ak, NULL))
+    if (milenage_f1(opc, k, _rand, sqn, amf, mac_a, NULL,0) || milenage_f2345(opc, k, _rand, res, ck, ik, ak, NULL,0))
     {
         *res_len = 0;
         return;
@@ -894,11 +798,11 @@ int milenage_auts(const u8 *opc, const u8 *k, const u8 *_rand, const u8 *auts, u
     u8 ak[6], mac_s[8];
     int i;
 
-    if (milenage_f2345(opc, k, _rand, NULL, NULL, NULL, NULL, ak))
+    if (milenage_f2345(opc, k, _rand, NULL, NULL, NULL, NULL, ak,0))
         return -1;
     for (i = 0; i < 6; i++)
         sqn[i] = auts[i] ^ ak[i];
-    if (milenage_f1(opc, k, _rand, sqn, amf, NULL, mac_s) || memcmp(mac_s, auts + 6, 8) != 0)
+    if (milenage_f1(opc, k, _rand, sqn, amf, NULL, mac_s,0) || memcmp(mac_s, auts + 6, 8) != 0)
         return -1;
     return 0;
 }
@@ -917,7 +821,7 @@ int gsm_milenage(const u8 *opc, const u8 *k, const u8 *_rand, u8 *sres, u8 *kc)
     u8 res[8], ck[16], ik[16];
     int i;
 
-    if (milenage_f2345(opc, k, _rand, res, ck, ik, NULL, NULL))
+    if (milenage_f2345(opc, k, _rand, res, ck, ik, NULL, NULL,0))
         return -1;
 
     for (i = 0; i < 8; i++)
@@ -956,7 +860,7 @@ int milenage_check(const u8 *opc, const u8 *k, const u8 *sqn, const u8 *_rand, c
     wpa_hexdump(MSG_DEBUG, "Milenage: AUTN", autn, 16);
     wpa_hexdump(MSG_DEBUG, "Milenage: RAND", _rand, 16);
 
-    if (milenage_f2345(opc, k, _rand, res, ck, ik, ak, NULL))
+    if (milenage_f2345(opc, k, _rand, res, ck, ik, ak, NULL,0))
         return -1;
 
     *res_len = 8;
@@ -973,12 +877,12 @@ int milenage_check(const u8 *opc, const u8 *k, const u8 *sqn, const u8 *_rand, c
     if (os_memcmp(rx_sqn, sqn, 6) <= 0)
     {
         u8 auts_amf[2] = {0x00, 0x00}; /* TS 33.102 v7.0.0, 6.3.3 */
-        if (milenage_f2345(opc, k, _rand, NULL, NULL, NULL, NULL, ak))
+        if (milenage_f2345(opc, k, _rand, NULL, NULL, NULL, NULL, ak,0))
             return -1;
         wpa_hexdump_key(MSG_DEBUG, "Milenage: AK*", ak, 6);
         for (i = 0; i < 6; i++)
             auts[i] = sqn[i] ^ ak[i];
-        if (milenage_f1(opc, k, _rand, sqn, auts_amf, NULL, auts + 6))
+        if (milenage_f1(opc, k, _rand, sqn, auts_amf, NULL, auts + 6,0))
             return -1;
         wpa_hexdump(MSG_DEBUG, "Milenage: AUTS", auts, 14);
         return -2;
@@ -986,7 +890,7 @@ int milenage_check(const u8 *opc, const u8 *k, const u8 *sqn, const u8 *_rand, c
 
     amf = autn + 6;
     wpa_hexdump(MSG_DEBUG, "Milenage: AMF", amf, 2);
-    if (milenage_f1(opc, k, _rand, rx_sqn, amf, mac_a, NULL))
+    if (milenage_f1(opc, k, _rand, rx_sqn, amf, mac_a, NULL,0))
         return -1;
 
     wpa_hexdump(MSG_DEBUG, "Milenage: MAC_A", mac_a, 8);
